@@ -1,0 +1,57 @@
+sudo -i
+apt update
+apt upgrade -y
+apt install nginx -y
+sudo apt install nginx mariadb-server php-fpm php-mysql
+apt update
+apt install php7.2 php7.2-fpm
+nano /etc/nginx/sites-available/default
+#USE THIS CODE IN DEFAULT FILE
+server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+
+        root /var/www/html;
+
+        index index.php index.html;
+
+        server_name _;
+
+        location / {
+                try_files $uri $uri/ =404;
+        }
+
+        location ~ \.php$ {
+                include snippets/fastcgi-php.conf;
+                fastcgi_pass unix:/var/run/php/php7.2-fpm.sock;
+        }
+}
+nginx -t
+service nginx stop
+service nginx start
+service nginx status
+cd /var/www/html/
+rm index.nginx-debian.html
+nano index.php
+#USE THIS CODE INSIDE INDEX.PHP
+<?php
+    phpinfo();
+?>
+now open browser and check ip if php info page comes up then proceed otherwise check above steps again
+nano /etc/php/7.2/fpm/pool.d/www.conf (add listen = 0.0.0.0:9000)
+wget https://wordpress.org/latest.tar.gz
+tar -xzvf latest.tar.gz
+mv wordpress /var/www/html/
+apt install mysql-server
+apt install php-fpm php-mysql
+sudo mysql -u root -p
+NOW TYPE BELOW COMMANDS IN MYSQL
+CREATE DATABASE test;
+CREATE USER 'admin'@'localhost' IDENTIFIED BY '12345';
+GRANT ALL PRIVILEGES ON test.* TO 'admin'@'localhost';
+flush privileges;
+exit;
+cp wp-config-sample.php wp-config.php
+nano wp-config.php
+ADD DATABASE, USER AND PASSWORD INFORMATION to the file, save and exit
+NOW ACCESS THE WEB USING THE IP AND CHECK IF WORDPRESS COMES UP OTHERWISE follow above commands
