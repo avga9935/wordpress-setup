@@ -1,0 +1,76 @@
+apt update
+apt upgrade -y
+swapoff -a
+nano /etc/fstab : comment swapoff wali line
+nano /etc/hostname : assign a hostname
+nano /etc/network/interfaces : add 3 lines 
+auto enp0s8
+iface enp0s8 inet static
+address 192.168.1.
+sudo ufw allow 22
+apt-get install -y openssh-server
+ssh-keygen
+NOTE : now copy the keys from master to node and node to master in id_rsa.pub
+apt-get update
+apt-get install curl
+sudo apt install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+sudo apt update
+sudo apt install -y apt-transport-https curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt update
+sudo apt install -y kubeadm kubelet kubectl
+NOTE : until step 24 each and every step needs to be followed on both master and worker node
+and from step 24 every step needs to be followed on master node only
+sudo kubeadm init
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+kubectl get pods -n kube-system
+kubectl get nodes
+kubectl create namespace wordpress
+nano storage-class.yaml
+nano mysql-secret.yaml
+nano mysql-pv.yaml
+nano mysql-pvc.yaml
+nano mysql-dp.yaml
+nano mysql-svc.yaml
+nano wp-pv.yaml
+nano wp-pvc.yaml
+nano wp-dp.yaml
+nano wp-svc.yaml
+Kubectl apply -f storage-class.yaml
+Kubectl apply -f mysql-secret.yaml
+Kubectl apply -f mysql-pv.yaml
+Kubectl apply -f mysql-pvc.yaml
+Kubectl apply -f mysql-dp.yaml
+Kubectl apply -f mysql-svc.yaml
+Kubectl apply -f wp-pv.yaml
+Kubectl apply -f wp-pvc.yaml
+Kubectl apply -f wp-dp.yaml
+Kubectl apply -f wp-svc.yaml
+Now check each and everything is fine or not?
+Kubectl get pv
+Kubectl get pvc
+Kubectl get pods
+Kubectl get svc (after using this command we will get an ip in front of wordpress svc use that to access wordpress)
+After this exec into mysql container to create database and allow user otherwise website will give database error.
+kubectl exec -it  POD_NAME -- /bin/bash
+Mysql -u root -p123 (123 is the password which i am currently using)
+CREATE DATABASE test;
+CREATE USER 'admin'@'localhost' IDENTIFIED BY '12345'; (use this command only when in wp-dp file we did not use root as user)
+GRANT ALL PRIVILEGES ON test.* TO 'admin'@'localhost';
+flush privileges;
+exit;
+
+
+Simplest wordpress setup on k8s
+
+Errors
+If pod doesn’t even start means we don’t get any logs it means there are some issues with the file mostly with storage mounting, we can find exact error using describe command
+If after pod is created and logs also come up then the issue is with the database mostly and if we get error such as ddtable not found or “wp-admin” database error in that situation change storage in pv files and it will work
+If pod shows access denied it means mysql file has issues as it is not able to find username and pass it is conflicting
