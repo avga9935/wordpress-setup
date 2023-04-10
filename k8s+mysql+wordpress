@@ -74,3 +74,10 @@ Errors
 If pod doesn’t even start means we don’t get any logs it means there are some issues with the file mostly with storage mounting, we can find exact error using describe command
 If after pod is created and logs also come up then the issue is with the database mostly and if we get error such as ddtable not found or “wp-admin” database error in that situation change storage in pv files and it will work
 If pod shows access denied it means mysql file has issues as it is not able to find username and pass it is conflicting
+
+
+kubeadm token create --print-join-command (command used to get join command again after using kubeadm init)
+kubectl edit deployment PODNAME -n NAMESPACE (command used to make any changes after deployment)
+kubectl exec -it -n NAMESPACE PODNAME -- /bin/bash (command to bash into any running pod)
+kubectl rollout restart deployment/MY-DEPLOYMENT (used to restart a deployment by creating a new replica set and scaling it up while scaling down the old replica set. This can be useful if you have made changes to your deployment, such as updating a configuration file or environment variable, and you want to ensure that the new changes are applied.)
+kubectl rollout undo deployment/MY-DEPLOYMENT (Command is used to rollback a deployment to a previous revision. This can be useful if you have made a change that caused issues with your deployment, and you want to revert back to the previous state.)
