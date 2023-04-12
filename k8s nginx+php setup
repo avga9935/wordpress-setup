@@ -1,0 +1,200 @@
+Create a php-pv.yaml file
+Create a php-pvc.yaml file
+Create a php-dp.yaml file and include a service file in it.
+Create a php-config.yaml file
+Create a nginx-pv.yaml file
+Create a nginx-pvc.yaml file
+Create a nginx-dp.yaml file and include a service file in it.
+Create a nginx-config.yaml file
+Kubectl apply -f php-config.yaml
+Kubectl apply -f php-pv.yaml
+Kubectl apply -f php-pvc.yaml
+Kubectl apply -f php-dp.yaml
+Kubectl apply -f nginx-config.yaml
+Kubectl apply -f nginx-pv.yaml
+Kubectl apply -f nginx-pvc.yaml
+Kubectl apply -f nginx-dp.yaml
+Now use kubectl get pods to check if pods are running, and ready
+Now use kubectl get svc to get services and look for the cluster ip of nginx
+Use the clusterip/info.php and php info page will pop up
+
+Issues and notes
+
+Make sure when assigning pv for nginx and php it is not important to use the same directories, we can use any directories for local storage.
+When assigning root directory in nginx-dp and nginx-config.yaml files make sure to use the same location and that location has read/write access otherwise we will face forbidden issues
+In php-dp.yaml file use mount path as same as root of nginx-dp.yaml other wise php will not pop up.
+
+PHP-PV.YAML
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: php-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  hostPath:
+    path: "/usr/bin/php/"
+PHP-PVC.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: php-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+PHP-DP.YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: php
+  template:
+    metadata:
+      labels:
+        app: php
+    spec:
+      containers:
+      - name: php
+        image: php:7.4-fpm
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+        ports:
+        - containerPort: 9000
+      volumes:
+      - name: php-config
+        configMap:
+          name: php-config
+      - name: html
+        persistentVolumeClaim:
+          claimName: php-pvc
+PHP-SVC.YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: php
+  labels:
+    app: php
+spec:
+  ports:
+    - port: 9000
+      targetPort: 9000
+  selector:
+    app: php
+PHP-CONFIG.YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: php-config
+data:
+  index.php: |
+    <?php phpinfo(); ?>
+NGINX-PV.YAML
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nginx-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  hostPath:
+    path: "/usr/bin/php/"
+NGINX-PVC.YAML
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginx-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+NGINX-DP.YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: nginx
+          mountPath: usr/share/nginx/html/
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: nginx.conf
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: nginx
+        persistentVolumeClaim:
+          claimName: nginx-pvc
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+NGINX-SVC.YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: nginx
+NGINX-CONF.YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    server {
+      listen 80;
+      server_name nginx-service;
+      root /usr/share/nginx/html/;
+
+      index index.php;
+
+      location / {
+          try_files $uri $uri/ /index.php?$query_string;
+      }
+
+      location ~ \.php$ {
+          fastcgi_pass   php:9000;
+          fastcgi_index  index.php;
+          fastcgi_split_path_info ^(.+\.php)(/.+)$;
+          fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+          include        fastcgi_params;
+      }
+    }
