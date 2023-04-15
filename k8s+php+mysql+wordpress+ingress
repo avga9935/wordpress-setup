@@ -1,0 +1,348 @@
+STORAGE-CLASS
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+
+INGRESS.YAML
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+  - host: avga9935.com
+    http:
+      paths:
+      - path: /?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: php-apache
+            port:
+              name: http
+
+MYSQL-PV.YAML
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+  labels:
+    type: local
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/usr/bin/mysql/"
+
+MYSQL-PVC.YAML
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+MYSQL-SECRET.YAML
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+type: kubernetes.io/basic-auth
+stringData:
+  password: "123"
+
+NGINX-CONFIG.YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    server {
+      listen 80;
+      server_name nginx-service;
+      root /var/www/html/;
+
+      index index.php;
+
+      location / {
+          try_files $uri $uri/ /index.php?$args;
+          autoindex on;
+          allow all;
+      }
+
+      location ~ \.php$ {
+          fastcgi_pass   php:9000;
+          fastcgi_index  index.php;
+          fastcgi_split_path_info ^(.+\.php)(/.+)$;
+          fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+          include        fastcgi_params;
+      }
+    }
+
+  NGINX-DP.YAML
+  apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: nginx
+          mountPath: /var/www/html
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: nginx.conf
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: nginx
+        persistentVolumeClaim:
+          claimName: wp-pvc
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+
+NGINX-SVC.YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: nginx
+
+PHP-CONFIG.YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: php-config
+data:
+  index.php: |
+    <?php phpinfo(); ?>
+
+PHP-DP.YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: php
+  template:
+    metadata:
+      labels:
+        app: php
+    spec:
+      containers:
+      - name: php
+        image: avga9935/php:4
+        volumeMounts:
+        - name: html
+          mountPath: /var/www/html
+        ports:
+        - containerPort: 9000
+        env:
+        - name: PHP_ENABLE_MYSQLI
+          value: "true"      
+      volumes:
+      - name: php-config
+        configMap:
+          name: php-config
+      - name: html
+        persistentVolumeClaim:
+          claimName: wp-pvc
+
+PHP-SVC.YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: php
+  labels:
+    app: php
+spec:
+  ports:
+    - port: 9000
+      targetPort: 9000
+  selector:
+    app: php
+
+WP-CONFIG.YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wp-config
+data:
+  wp-config.php: |
+    <?php
+    define('DB_NAME', 'wordpress');
+    define('DB_USER', 'root');
+    define('DB_PASSWORD', '123');
+    define('DB_HOST', 'mysql');
+    define('DB_CHARSET', 'utf8');
+    define('DB_COLLATE', '');
+    define( 'WP_HOME', 'http://wordpress' );
+    define( 'WP_SITEURL', 'http://wordpress' );
+    define( 'DOCUMENT_ROOT', '/var/www/html' );
+
+
+    define('AUTH_KEY',         'put your unique phrase here');
+    define('SECURE_AUTH_KEY',  'put your unique phrase here');
+    define('LOGGED_IN_KEY',    'put your unique phrase here');
+    define('NONCE_KEY',        'put your unique phrase here');
+    define('AUTH_SALT',        'put your unique phrase here');
+    define('SECURE_AUTH_SALT', 'put your unique phrase here');
+    define('LOGGED_IN_SALT',   'put your unique phrase here');
+    define('NONCE_SALT',       'put your unique phrase here');
+
+    $table_prefix = 'wp_';
+
+    define('WP_DEBUG', false);
+
+    if ( !defined('ABSPATH') )
+        define('ABSPATH', dirname(__FILE__) . '/');
+
+    require_once(ABSPATH . 'wp-settings.php');
+
+WP-PV.YAML
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wp-pv
+  labels:
+    type: local
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/var/lib/wordpress/"
+
+WP-PVC.YAML
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wp-pvc
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+WP-DP.YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec:
+  selector:
+    matchLabels:
+      app: wordpress
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      containers:
+      - image: wordpress:latest
+        name: wordpress
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: mysql
+        - name: WORDPRESS_DB_USER
+          value: root
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: password
+        - name: WORDPRESS_DB_NAME
+          value: wordpress
+        ports:
+        - containerPort: 80
+          name: wordpress
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+        - name: wp-config
+          mountPath: /var/www/html/wp-config.php
+          subPath: wp-config.php 
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: wp-pvc
+      - name: wp-config
+        configMap:
+          name: wp-config
+
+WP-SVC.YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: wordpress
+
+
+SETUP WORDPRESS USING NGINX+PHP+MYSQL+NGINX INGRESS CONTROLLER
+
+Apply storage class at first so pv can be created.
+Now apply mysql-pv and wp-pv only
+Now apply mysql-pvc and wp-pvc only, as we need to create shared storage for nginx and php with wordpress pvc.
+Now apply mysql-secret
+Now apply all of the config files, nginx-config, php-config,wp-config.
+Now apply php, then mysql, then nginx, then wordpress
+Now use kubectl get pod to check if every container is working fine so we can proceed further.
+kubectl exec -it PODNAME bash use this command to bash
+Now bash into the mysql pod to check database, user and privileges.
+Now bash into nginx pod and cat /var/www/html/wp-config.php to check if data is in there and correct, if it’s not then update it.
+Now use kubectl get svc to get the cluster ip of nginx.
+Now use the ip on the browser to check if wordpress pop-up.
+ERRORS
+If database error is there then check the database in mysql pod and nginx pod only.
+If we get errors related to php , either we are using the wrong image or dependencies are not installed correctly.
+If getting an error related to the mysql container not getting started due to already available files it means pv is giving trouble then delete mysql deployment, pvc,and pv.
+If pv is not getting deleted it means pv is stuck with wp-pvc so delete every pvc and pv and then recreate.
+If after using cluster ip on browser a blank page/bad gateway error comes up it means the php is not configured php is still working on sock so we need to change that as well and try to do it in the yaml file itself after exec in the pod it may still get errors.
+If we get permission denied the add allow all line in the config file for that pod.
